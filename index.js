@@ -9,6 +9,27 @@ const mongoose = require('mongoose');
 const app = express();
 const PORT = process.env.PORT || 5001;
 
+// Load simple .env (without extra dependencies)
+// This keeps local development working when you create `server/.env`.
+try {
+    const envPath = path.join(__dirname, '.env');
+    if (fs.existsSync(envPath)) {
+        const raw = fs.readFileSync(envPath, 'utf8');
+        raw.split(/\r?\n/).forEach(line => {
+            const trimmed = line.trim();
+            if (!trimmed || trimmed.startsWith('#')) return;
+            const eqIdx = trimmed.indexOf('=');
+            if (eqIdx === -1) return;
+            const key = trimmed.slice(0, eqIdx).trim();
+            let val = trimmed.slice(eqIdx + 1).trim();
+            val = val.replace(/^['"]/, '').replace(/['"]$/, '');
+            if (process.env[key] === undefined) process.env[key] = val;
+        });
+    }
+} catch (e) {
+    // Ignore .env load errors; we can still rely on real environment variables.
+}
+
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -20,7 +41,8 @@ if (!fs.existsSync('./uploads')) {
 }
 
 // MongoDB Connection
-mongoose.connect('mongodb://localhost:27017/EliteSportsHub')
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/EliteSportsHub'
+mongoose.connect(MONGODB_URI)
     .then(() => console.log('Connected to MongoDB Successfully'))
     .catch(err => console.error('MongoDB Connection Error:', err));
 

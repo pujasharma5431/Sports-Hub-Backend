@@ -297,6 +297,15 @@ app.put('/api/admin/orders/:id/status', async (req, res) => {
     }
 });
 
+app.delete('/api/admin/orders/:id', async (req, res) => {
+    try {
+        await Order.findByIdAndDelete(req.params.id);
+        res.json({ message: 'Order deleted successfully' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // 3. PAGES
 
 app.get('/api/pages', async (req, res) => {

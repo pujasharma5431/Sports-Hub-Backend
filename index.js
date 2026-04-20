@@ -1,3 +1,4 @@
+
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
@@ -88,6 +89,8 @@ const OrderSchema = new mongoose.Schema({
     total_amount: Number,
     payment_method: String,
     status: { type: String, default: 'Pending' },
+    is_deleted: { type: Boolean, default: false },
+    deleted_at: { type: Date, default: null },
     created_at: { type: Date, default: Date.now }
 }, { toJSON: { virtuals: true }, toObject: { virtuals: true } });
 
@@ -99,9 +102,9 @@ const PageSchema = new mongoose.Schema({
 }, { toJSON: { virtuals: true }, toObject: { virtuals: true } });
 
 // Virtual for ID
-ProductSchema.virtual('id').get(function() { return this._id.toHexString(); });
-OrderSchema.virtual('id').get(function() { return this._id.toHexString(); });
-PageSchema.virtual('id').get(function() { return this._id.toHexString(); });
+ProductSchema.virtual('id').get(function () { return this._id.toHexString(); });
+OrderSchema.virtual('id').get(function () { return this._id.toHexString(); });
+PageSchema.virtual('id').get(function () { return this._id.toHexString(); });
 
 const Product = mongoose.model('Product', ProductSchema);
 const Order = mongoose.model('Order', OrderSchema);
@@ -145,7 +148,7 @@ app.get('/api/products/:id', async (req, res) => {
 app.post('/api/products', upload.array('images', 10), async (req, res) => {
     try {
         const { name, brand, price, discount_price, is_sale, is_limited, featured, description, category, audience, player, stock, remote_urls, file_order } = req.body;
-        
+
         const processedLocalImages = [];
         for (const file of (req.files || [])) {
             try {
@@ -190,7 +193,7 @@ app.post('/api/products', upload.array('images', 10), async (req, res) => {
 app.put('/api/products/:id', upload.array('images', 10), async (req, res) => {
     try {
         const { name, brand, price, discount_price, is_sale, is_limited, featured, description, category, audience, player, stock, remote_urls, file_order } = req.body;
-        
+
         const processedLocalImages = [];
         for (const file of (req.files || [])) {
             try {
@@ -280,7 +283,16 @@ app.post('/api/orders', async (req, res) => {
 
 app.get('/api/admin/orders', async (req, res) => {
     try {
-        const orders = await Order.find().sort({ created_at: -1 });
+        const orders = await Order.find({ is_deleted: false }).sort({ created_at: -1 });
+        res.json(orders);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/admin/orders/deleted', async (req, res) => {
+    try {
+        const orders = await Order.find({ is_deleted: true }).sort({ deleted_at: -1, created_at: -1 });
         res.json(orders);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -299,8 +311,37 @@ app.put('/api/admin/orders/:id/status', async (req, res) => {
 
 app.delete('/api/admin/orders/:id', async (req, res) => {
     try {
-        await Order.findByIdAndDelete(req.params.id);
-        res.json({ message: 'Order deleted successfully' });
+        const order = await Order.findByIdAndUpdate(
+            req.params.id,
+            { is_deleted: true, deleted_at: new Date() },
+            { new: true }
+        );
+        if (!order) return res.status(404).json({ error: 'Order not found' });
+        res.json({ message: 'Order moved to deleted orders successfully' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.put('/api/admin/orders/:id/restore', async (req, res) => {
+    try {
+        const order = await Order.findByIdAndUpdate(
+            req.params.id,
+            { is_deleted: false, deleted_at: null },
+            { new: true }
+        );
+        if (!order) return res.status(404).json({ error: 'Order not found' });
+        res.json({ message: 'Order restored successfully' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.delete('/api/admin/orders/:id/permanent', async (req, res) => {
+    try {
+        const order = await Order.findByIdAndDelete(req.params.id);
+        if (!order) return res.status(404).json({ error: 'Order not found' });
+        res.json({ message: 'Order permanently deleted successfully' });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
